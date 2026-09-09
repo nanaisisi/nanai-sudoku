@@ -100,6 +100,35 @@ impl RammapApp {
         }
 
         let new_send = send.clone();
+        let pencil_surface = self.pencil_mode;
+        let mode_banner = Border::new()
+            .padding(Thickness::xy(12.0, 8.0))
+            .background(Brush::Solid(if pencil_surface {
+                Color::argb(255, 92, 72, 32)
+            } else {
+                Color::argb(255, 43, 46, 54)
+            }))
+            .border_brush(Brush::Solid(if pencil_surface {
+                Color::argb(255, 218, 170, 70)
+            } else {
+                Color::argb(255, 105, 109, 122)
+            }))
+            .border_thickness(Thickness::uniform(1.0))
+            .corner_radius(CornerRadius::uniform(4.0))
+            .content(
+                TextBlock::new()
+                    .text(if self.pencil_mode {
+                        "✎ 下書きモード — 候補数字を入力中"
+                    } else {
+                        "数字入力モード"
+                    })
+                    .font_size(14.0)
+                    .font_weight(if self.pencil_mode {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::NORMAL
+                    }),
+            );
         let solving_methods = self
             .sudoku
             .difficulty()
@@ -130,46 +159,57 @@ impl RammapApp {
             "空いているセルを選択してください"
         };
 
-        StackPanel::new()
-            .spacing(16.0)
-            .margin(Thickness::uniform(24.0))
-            .children((
-                TextBlock::new()
-                    .text("Nanai Sudoku")
-                    .font_size(30.0)
-                    .font_weight(FontWeight::BOLD),
-                TextBlock::new().text("9×9 ナンプレ").font_size(14.0),
-                TextBlock::new()
-                    .text(format!(
-                        "難易度: {}（{} / {}マス入力済み）",
-                        self.sudoku.difficulty().label(),
-                        self.sudoku.difficulty().description(),
-                        self.sudoku.difficulty().clue_count(),
-                    ))
-                    .font_size(14.0),
-                StackPanel::new()
-                    .orientation(Orientation::Horizontal)
-                    .spacing(8.0)
-                    .keyed_children(difficulty_buttons),
-                TextBlock::new().text("解法リスト").font_size(15.0),
-                StackPanel::new()
-                    .spacing(2.0)
-                    .keyed_children(solving_methods),
-                Border::new()
-                    .padding(Thickness::uniform(8.0))
-                    .background(Brush::Solid(Color::argb(255, 32, 34, 40)))
-                    .corner_radius(CornerRadius::uniform(6.0))
-                    .content(StackPanel::new().spacing(2.0).keyed_children(rows)),
-                StackPanel::new()
-                    .orientation(Orientation::Horizontal)
-                    .spacing(8.0)
-                    .keyed_children(keypad),
-                TextBlock::new().text(status).font_size(14.0),
-                Button::new()
-                    .width(150.0)
-                    .on_click(move || new_send(RammapMessage::NewGame))
-                    .content(TextBlock::new().text("新しいゲーム")),
-            ))
+        ScrollViewer::new().content(
+            StackPanel::new()
+                .spacing(12.0)
+                .margin(Thickness::uniform(16.0))
+                .children((
+                    TextBlock::new()
+                        .text(if self.pencil_mode {
+                            "Nanai Sudoku  —  下書きモード"
+                        } else {
+                            "Nanai Sudoku"
+                        })
+                        .font_size(30.0)
+                        .font_weight(FontWeight::BOLD),
+                    mode_banner,
+                    TextBlock::new().text("9×9 ナンプレ").font_size(14.0),
+                    TextBlock::new()
+                        .text(format!(
+                            "難易度: {}（{} / {}マス入力済み）",
+                            self.sudoku.difficulty().label(),
+                            self.sudoku.difficulty().description(),
+                            self.sudoku.difficulty().clue_count(),
+                        ))
+                        .font_size(14.0),
+                    StackPanel::new()
+                        .orientation(Orientation::Horizontal)
+                        .spacing(8.0)
+                        .keyed_children(difficulty_buttons),
+                    TextBlock::new().text("解法リスト").font_size(15.0),
+                    StackPanel::new()
+                        .spacing(2.0)
+                        .keyed_children(solving_methods),
+                    Border::new()
+                        .padding(Thickness::uniform(8.0))
+                        .background(Brush::Solid(if self.pencil_mode {
+                            Color::argb(255, 58, 50, 34)
+                        } else {
+                            Color::argb(255, 32, 34, 40)
+                        }))
+                        .corner_radius(CornerRadius::uniform(6.0))
+                        .content(StackPanel::new().spacing(2.0).keyed_children(rows)),
+                    StackPanel::new()
+                        .orientation(Orientation::Horizontal)
+                        .spacing(8.0)
+                        .keyed_children(keypad),
+                    TextBlock::new().text(status).font_size(14.0),
+                    Button::new()
+                        .width(150.0)
+                        .on_click(move || new_send(RammapMessage::NewGame))
+                        .content(TextBlock::new().text("新しいゲーム")),
+                )),
+        )
     }
 
     fn cell<S: Fn(RammapMessage) + Clone + 'static>(
@@ -203,8 +243,8 @@ impl RammapApp {
             Color::argb(255, 43, 46, 54)
         };
         let border_thickness = Thickness::new(
-            if col % 3 == 0 { 2.0 } else { 1.0 },
-            if row % 3 == 0 { 2.0 } else { 1.0 },
+            if col.is_multiple_of(3) { 2.0 } else { 1.0 },
+            if row.is_multiple_of(3) { 2.0 } else { 1.0 },
             if col % 3 == 2 { 2.0 } else { 1.0 },
             if row % 3 == 2 { 2.0 } else { 1.0 },
         );

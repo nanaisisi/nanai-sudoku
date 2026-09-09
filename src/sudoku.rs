@@ -101,6 +101,25 @@ impl Difficulty {
         }
         puzzle
     }
+
+    fn board_for_game(self, game_number: u32) -> ([[u8; 9]; 9], [[u8; 9]; 9]) {
+        let puzzle = self.puzzle();
+        if game_number.is_multiple_of(2) {
+            (puzzle, SOLUTION)
+        } else {
+            (rotate_board(puzzle), rotate_board(SOLUTION))
+        }
+    }
+}
+
+fn rotate_board(board: [[u8; 9]; 9]) -> [[u8; 9]; 9] {
+    let mut rotated = [[0; 9]; 9];
+    for row in 0..9 {
+        for col in 0..9 {
+            rotated[8 - row][8 - col] = board[row][col];
+        }
+    }
+    rotated
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,11 +133,13 @@ pub enum InputResult {
 #[derive(Debug, Clone)]
 pub struct Sudoku {
     cells: [[u8; 9]; 9],
+    solution: [[u8; 9]; 9],
     pencil_marks: [[u16; 9]; 9],
     givens: [[bool; 9]; 9],
     selected: Option<(usize, usize)>,
     completed: bool,
     difficulty: Difficulty,
+    game_number: u32,
 }
 
 impl Default for Sudoku {
@@ -133,7 +154,13 @@ impl Sudoku {
     }
 
     pub fn new_with_difficulty(difficulty: Difficulty) -> Self {
-        let puzzle = difficulty.puzzle();
+        Self::new_game_state(difficulty, 0)
+    }
+
+    fn new_game_state(difficulty: Difficulty, game_number: u32) -> Self {
+        let (puzzle, solution) = difficulty.board_for_game(game_number);
+        let mut derived = puzzle;
+        debug_assert!(solve_board(&mut derived));
         let mut givens = [[false; 9]; 9];
         for row in 0..9 {
             for col in 0..9 {
@@ -142,11 +169,13 @@ impl Sudoku {
         }
         Self {
             cells: puzzle,
+            solution,
             pencil_marks: [[0; 9]; 9],
             givens,
             selected: None,
             completed: false,
             difficulty,
+            game_number,
         }
     }
 
@@ -169,6 +198,12 @@ impl Sudoku {
         self.difficulty
     }
 
+    #[allow(dead_code)]
+    pub fn solve(&self) -> Option<[[u8; 9]; 9]> {
+        let mut board = self.cells;
+        solve_board(&mut board).then_some(board)
+    }
+
     pub fn select(&mut self, row: usize, col: usize) {
         if row < 9 && col < 9 {
             self.selected = Some((row, col));
@@ -183,10 +218,10 @@ impl Sudoku {
             return InputResult::Ignored;
         }
         self.cells[row][col] = value;
-        self.completed = self.cells == SOLUTION;
+        self.completed = self.cells == self.solution;
         if self.completed {
             InputResult::Completed
-        } else if value != 0 && value != SOLUTION[row][col] {
+        } else if value != 0 && value != self.solution[row][col] {
             InputResult::Incorrect
         } else {
             InputResult::Updated
@@ -227,12 +262,94 @@ impl Sudoku {
 
     pub fn is_wrong(&self, row: usize, col: usize) -> bool {
         let value = self.cells[row][col];
-        value != 0 && value != SOLUTION[row][col]
+        value != 0 && value != self.solution[row][col]
     }
 
-    pub fn reset(&mut self) {
-        *self = Self::new_with_difficulty(self.difficulty);
+    pub fn new_game(&mut self) {
+        *self = Self::new_game_state(self.difficulty, self.game_number.wrapping_add(1));
     }
+}
+
+fn solve_board(board: &mut [[u8; 9]; 9]) -> bool {
+    let mut best_cell = None;
+    let mut best_candidates = 0u16;
+    let mut best_count = 10;
+
+    for row in 0..9 {
+        for col in 0..9 {
+            if board[row][col] != 0 {
+                continue;
+            }
+            let candidates = candidates_for(board, row, col);
+            let count = candidates.count_ones();
+            if count == 0 {
+                return false;
+            }
+            if count < best_count {
+                best_cell = Some((row, col));
+                best_candidates = candidates;
+                best_count = count;
+            }
+        }
+    }
+
+    let Some((row, col)) = best_cell else {
+        return is_valid_board(board);
+    };
+
+    for value in 1..=9 {
+        let bit = 1u16 << value;
+        if best_candidates & bit != 0 {
+            board[row][col] = value;
+            if solve_board(board) {
+                return true;
+            }
+            board[row][col] = 0;
+        }
+    }
+    false
+}
+
+fn candidates_for(board: &[[u8; 9]; 9], row: usize, col: usize) -> u16 {
+    let mut used = 0u16;
+    for index in 0..9 {
+        used |= 1u16 << board[row][index];
+        used |= 1u16 << board[index][col];
+    }
+    let box_row = row / 3 * 3;
+    let box_col = col / 3 * 3;
+    for box_row in box_row..box_row + 3 {
+        for box_col in box_col..box_col + 3 {
+            used |= 1u16 << board[box_row][box_col];
+        }
+    }
+    (!used) & 0b1_1111_1110
+}
+
+fn is_valid_board(board: &[[u8; 9]; 9]) -> bool {
+    for row in 0..9 {
+        for col in 0..9 {
+            let value = board[row][col];
+            if value == 0 {
+                return false;
+            }
+            if (0..9).any(|other| other != col && board[row][other] == value)
+                || (0..9).any(|other| other != row && board[other][col] == value)
+            {
+                return false;
+            }
+            let box_row = row / 3 * 3;
+            let box_col = col / 3 * 3;
+            if (box_row..box_row + 3).any(|other_row| {
+                (box_col..box_col + 3).any(|other_col| {
+                    (other_row != row || other_col != col) && board[other_row][other_col] == value
+                })
+            }) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -295,5 +412,29 @@ mod tests {
         assert_eq!(game.pencil_marks(0, 2), 1 << 4);
         game.clear();
         assert_eq!(game.pencil_marks(0, 2), 1 << 4);
+    }
+
+    #[test]
+    fn new_game_clears_progress_and_creates_a_new_board() {
+        let mut game = Sudoku::new();
+        let initial = *game.cells();
+        game.select(0, 2);
+        game.toggle_pencil_mark(4);
+        game.input(4);
+
+        game.new_game();
+
+        assert_ne!(*game.cells(), initial);
+        assert_eq!(game.selected(), None);
+        assert_eq!(game.pencil_marks(0, 2), 0);
+        assert!(!game.is_completed());
+    }
+
+    #[test]
+    fn every_difficulty_can_be_derived_from_its_clues() {
+        for difficulty in super::Difficulty::ALL {
+            let game = Sudoku::new_with_difficulty(difficulty);
+            assert_eq!(game.solve(), Some(game.solution));
+        }
     }
 }

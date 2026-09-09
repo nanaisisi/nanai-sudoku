@@ -32,7 +32,7 @@ impl RammapApp {
                 self.pencil_mode = false;
             }
             RammapMessage::NewGame => {
-                self.sudoku.reset();
+                self.sudoku.new_game();
                 self.pencil_mode = false;
             }
         }
