@@ -318,9 +318,9 @@ fn candidates_for(board: &[[u8; 9]; 9], row: usize, col: usize) -> u16 {
     }
     let box_row = row / 3 * 3;
     let box_col = col / 3 * 3;
-    for box_row in box_row..box_row + 3 {
-        for box_col in box_col..box_col + 3 {
-            used |= 1u16 << board[box_row][box_col];
+    for board_row in board.iter().skip(box_row).take(3) {
+        for &value in board_row.iter().skip(box_col).take(3) {
+            used |= 1u16 << value;
         }
     }
     (!used) & 0b1_1111_1110
