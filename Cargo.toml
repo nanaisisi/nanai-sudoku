@@ -1,0 +1,11 @@
+[package]
+name = "nanai-sudoku"
+version = "0.1.0"
+edition = "2024"
+license = "MIT and Apache-2.0"
+
+[dependencies]
+windows-reactor = { git = "https://github.com/microsoft/windows-rs", branch = "master" }
+
+[build-dependencies]
+windows-reactor-setup = { git = "https://github.com/microsoft/windows-rs", branch = "master" }
