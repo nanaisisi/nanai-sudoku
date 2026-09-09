@@ -125,7 +125,6 @@ fn rotate_board(board: [[u8; 9]; 9]) -> [[u8; 9]; 9] {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputResult {
     Updated,
-    Incorrect,
     Ignored,
     Completed,
 }
@@ -138,6 +137,7 @@ pub struct Sudoku {
     givens: [[bool; 9]; 9],
     selected: Option<(usize, usize)>,
     completed: bool,
+    answers_checked: bool,
     difficulty: Difficulty,
     game_number: u32,
 }
@@ -158,9 +158,19 @@ impl Sudoku {
     }
 
     fn new_game_state(difficulty: Difficulty, game_number: u32) -> Self {
-        let (puzzle, solution) = difficulty.board_for_game(game_number);
+        let (puzzle, expected_solution) = difficulty.board_for_game(game_number);
         let mut derived = puzzle;
-        debug_assert!(solve_board(&mut derived));
+        assert!(
+            solve_board(&mut derived),
+            "generated Sudoku puzzle is unsolvable"
+        );
+        debug_assert!(contains_givens(&derived, &puzzle));
+        let solution = if derived == expected_solution {
+            derived
+        } else {
+            // A puzzle may have multiple solutions, but the generated answer is preferred.
+            expected_solution
+        };
         let mut givens = [[false; 9]; 9];
         for row in 0..9 {
             for col in 0..9 {
@@ -174,6 +184,7 @@ impl Sudoku {
             givens,
             selected: None,
             completed: false,
+            answers_checked: false,
             difficulty,
             game_number,
         }
@@ -218,11 +229,10 @@ impl Sudoku {
             return InputResult::Ignored;
         }
         self.cells[row][col] = value;
+        self.answers_checked = false;
         self.completed = self.cells == self.solution;
         if self.completed {
             InputResult::Completed
-        } else if value != 0 && value != self.solution[row][col] {
-            InputResult::Incorrect
         } else {
             InputResult::Updated
         }
@@ -262,7 +272,11 @@ impl Sudoku {
 
     pub fn is_wrong(&self, row: usize, col: usize) -> bool {
         let value = self.cells[row][col];
-        value != 0 && value != self.solution[row][col]
+        self.answers_checked && value != 0 && value != self.solution[row][col]
+    }
+
+    pub fn check_answers(&mut self) {
+        self.answers_checked = true;
     }
 
     pub fn new_game(&mut self) {
@@ -271,35 +285,15 @@ impl Sudoku {
 }
 
 fn solve_board(board: &mut [[u8; 9]; 9]) -> bool {
-    let mut best_cell = None;
-    let mut best_candidates = 0u16;
-    let mut best_count = 10;
-
-    for row in 0..9 {
-        for col in 0..9 {
-            if board[row][col] != 0 {
-                continue;
-            }
-            let candidates = candidates_for(board, row, col);
-            let count = candidates.count_ones();
-            if count == 0 {
-                return false;
-            }
-            if count < best_count {
-                best_cell = Some((row, col));
-                best_candidates = candidates;
-                best_count = count;
-            }
-        }
+    if !is_valid_partial_board(board) {
+        return false;
     }
-
-    let Some((row, col)) = best_cell else {
-        return is_valid_board(board);
+    let Some((row, col)) = first_empty(board) else {
+        return true;
     };
 
     for value in 1..=9 {
-        let bit = 1u16 << value;
-        if best_candidates & bit != 0 {
+        if is_safe(board, row, col, value) {
             board[row][col] = value;
             if solve_board(board) {
                 return true;
@@ -310,46 +304,43 @@ fn solve_board(board: &mut [[u8; 9]; 9]) -> bool {
     false
 }
 
-fn candidates_for(board: &[[u8; 9]; 9], row: usize, col: usize) -> u16 {
-    let mut used = 0u16;
-    for index in 0..9 {
-        used |= 1u16 << board[row][index];
-        used |= 1u16 << board[index][col];
-    }
-    let box_row = row / 3 * 3;
-    let box_col = col / 3 * 3;
-    for board_row in board.iter().skip(box_row).take(3) {
-        for &value in board_row.iter().skip(box_col).take(3) {
-            used |= 1u16 << value;
+fn first_empty(board: &[[u8; 9]; 9]) -> Option<(usize, usize)> {
+    for (row, values) in board.iter().enumerate() {
+        if let Some(col) = values.iter().position(|&value| value == 0) {
+            return Some((row, col));
         }
     }
-    (!used) & 0b1_1111_1110
+    None
 }
 
-fn is_valid_board(board: &[[u8; 9]; 9]) -> bool {
+fn is_safe(board: &[[u8; 9]; 9], row: usize, col: usize, value: u8) -> bool {
+    !(0..9).any(|index| board[row][index] == value)
+        && !(0..9).any(|index| board[index][col] == value)
+        && !(row / 3 * 3..row / 3 * 3 + 3).any(|box_row| {
+            (col / 3 * 3..col / 3 * 3 + 3).any(|box_col| board[box_row][box_col] == value)
+        })
+}
+
+fn is_valid_partial_board(board: &[[u8; 9]; 9]) -> bool {
     for row in 0..9 {
         for col in 0..9 {
             let value = board[row][col];
-            if value == 0 {
-                return false;
-            }
-            if (0..9).any(|other| other != col && board[row][other] == value)
-                || (0..9).any(|other| other != row && board[other][col] == value)
-            {
-                return false;
-            }
-            let box_row = row / 3 * 3;
-            let box_col = col / 3 * 3;
-            if (box_row..box_row + 3).any(|other_row| {
-                (box_col..box_col + 3).any(|other_col| {
-                    (other_row != row || other_col != col) && board[other_row][other_col] == value
-                })
-            }) {
-                return false;
+            if value != 0 {
+                let mut without_value = *board;
+                without_value[row][col] = 0;
+                if !is_safe(&without_value, row, col, value) {
+                    return false;
+                }
             }
         }
     }
     true
+}
+
+fn contains_givens(solution: &[[u8; 9]; 9], puzzle: &[[u8; 9]; 9]) -> bool {
+    (0..9).all(|row| {
+        (0..9).all(|col| puzzle[row][col] == 0 || puzzle[row][col] == solution[row][col])
+    })
 }
 
 #[cfg(test)]
@@ -397,8 +388,10 @@ mod tests {
     fn duplicate_values_are_reported() {
         let mut game = Sudoku::new();
         game.select(0, 2);
-        assert_eq!(game.input(5), InputResult::Incorrect);
+        assert_eq!(game.input(5), InputResult::Updated);
         assert!(game.has_conflict(0, 2));
+        assert!(!game.is_wrong(0, 2));
+        game.check_answers();
         assert!(game.is_wrong(0, 2));
     }
 

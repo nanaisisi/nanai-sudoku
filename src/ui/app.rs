@@ -24,12 +24,38 @@ impl Component for RammapApp {
                 sender.send(message);
             }
         };
-        self.sudoku_view(send)
+        let keys = [
+            AcceleratorKey::NumberPad1,
+            AcceleratorKey::NumberPad2,
+            AcceleratorKey::NumberPad3,
+            AcceleratorKey::NumberPad4,
+            AcceleratorKey::NumberPad5,
+            AcceleratorKey::NumberPad6,
+            AcceleratorKey::NumberPad7,
+            AcceleratorKey::NumberPad8,
+            AcceleratorKey::NumberPad9,
+        ];
+        let accelerators = keys
+            .into_iter()
+            .enumerate()
+            .map(|(index, key)| {
+                KeyAccelerator::new(
+                    key,
+                    AcceleratorModifiers::None,
+                    context.message(RammapMessage::EnterNumber((index + 1) as u8)),
+                )
+            })
+            .collect::<Vec<_>>();
+        self.sudoku_view(send, KeyAccelerators::new(accelerators))
     }
 }
 
 impl RammapApp {
-    fn sudoku_view<S: Fn(RammapMessage) + Clone + 'static>(&self, send: S) -> View {
+    fn sudoku_view<S: Fn(RammapMessage) + Clone + 'static>(
+        &self,
+        send: S,
+        accelerators: KeyAccelerators,
+    ) -> View {
         let mut rows = Vec::new();
         for row in 0..9 {
             let mut cells = Vec::new();
@@ -79,6 +105,16 @@ impl RammapApp {
                 } else {
                     "下書き"
                 })),
+        ));
+
+        let check_send = send.clone();
+        keypad.push(KeyedView::new(
+            11usize,
+            Button::new()
+                .width(104.0)
+                .height(42.0)
+                .on_click(move || check_send(RammapMessage::CheckAnswers))
+                .content(TextBlock::new().text("答え合わせ")),
         ));
 
         let mut difficulty_buttons = Vec::new();
@@ -159,57 +195,59 @@ impl RammapApp {
             "空いているセルを選択してください"
         };
 
-        ScrollViewer::new().content(
-            StackPanel::new()
-                .spacing(12.0)
-                .margin(Thickness::uniform(16.0))
-                .children((
-                    TextBlock::new()
-                        .text(if self.pencil_mode {
-                            "Nanai Sudoku  —  下書きモード"
-                        } else {
-                            "Nanai Sudoku"
-                        })
-                        .font_size(30.0)
-                        .font_weight(FontWeight::BOLD),
-                    mode_banner,
-                    TextBlock::new().text("9×9 ナンプレ").font_size(14.0),
-                    TextBlock::new()
-                        .text(format!(
-                            "難易度: {}（{} / {}マス入力済み）",
-                            self.sudoku.difficulty().label(),
-                            self.sudoku.difficulty().description(),
-                            self.sudoku.difficulty().clue_count(),
-                        ))
-                        .font_size(14.0),
-                    StackPanel::new()
-                        .orientation(Orientation::Horizontal)
-                        .spacing(8.0)
-                        .keyed_children(difficulty_buttons),
-                    TextBlock::new().text("解法リスト").font_size(15.0),
-                    StackPanel::new()
-                        .spacing(2.0)
-                        .keyed_children(solving_methods),
-                    Border::new()
-                        .padding(Thickness::uniform(8.0))
-                        .background(Brush::Solid(if self.pencil_mode {
-                            Color::argb(255, 58, 50, 34)
-                        } else {
-                            Color::argb(255, 32, 34, 40)
-                        }))
-                        .corner_radius(CornerRadius::uniform(6.0))
-                        .content(StackPanel::new().spacing(2.0).keyed_children(rows)),
-                    StackPanel::new()
-                        .orientation(Orientation::Horizontal)
-                        .spacing(8.0)
-                        .keyed_children(keypad),
-                    TextBlock::new().text(status).font_size(14.0),
-                    Button::new()
-                        .width(150.0)
-                        .on_click(move || new_send(RammapMessage::NewGame))
-                        .content(TextBlock::new().text("新しいゲーム")),
-                )),
-        )
+        Grid::new()
+            .key_accelerators(accelerators)
+            .children((ScrollViewer::new().content(
+                StackPanel::new()
+                    .spacing(12.0)
+                    .margin(Thickness::uniform(16.0))
+                    .children((
+                        TextBlock::new()
+                            .text(if self.pencil_mode {
+                                "Nanai Sudoku  —  下書きモード"
+                            } else {
+                                "Nanai Sudoku"
+                            })
+                            .font_size(30.0)
+                            .font_weight(FontWeight::BOLD),
+                        mode_banner,
+                        TextBlock::new().text("9×9 ナンプレ").font_size(14.0),
+                        TextBlock::new()
+                            .text(format!(
+                                "難易度: {}（{} / {}マス入力済み）",
+                                self.sudoku.difficulty().label(),
+                                self.sudoku.difficulty().description(),
+                                self.sudoku.difficulty().clue_count(),
+                            ))
+                            .font_size(14.0),
+                        StackPanel::new()
+                            .orientation(Orientation::Horizontal)
+                            .spacing(8.0)
+                            .keyed_children(difficulty_buttons),
+                        TextBlock::new().text("解法リスト").font_size(15.0),
+                        StackPanel::new()
+                            .spacing(2.0)
+                            .keyed_children(solving_methods),
+                        Border::new()
+                            .padding(Thickness::uniform(8.0))
+                            .background(Brush::Solid(if self.pencil_mode {
+                                Color::argb(255, 58, 50, 34)
+                            } else {
+                                Color::argb(255, 32, 34, 40)
+                            }))
+                            .corner_radius(CornerRadius::uniform(6.0))
+                            .content(StackPanel::new().spacing(2.0).keyed_children(rows)),
+                        StackPanel::new()
+                            .orientation(Orientation::Horizontal)
+                            .spacing(8.0)
+                            .keyed_children(keypad),
+                        TextBlock::new().text(status).font_size(14.0),
+                        Button::new()
+                            .width(150.0)
+                            .on_click(move || new_send(RammapMessage::NewGame))
+                            .content(TextBlock::new().text("新しいゲーム")),
+                    )),
+            ),))
     }
 
     fn cell<S: Fn(RammapMessage) + Clone + 'static>(
@@ -226,6 +264,14 @@ impl RammapApp {
             .is_some_and(|(selected_row, selected_col)| {
                 selected_row / 3 == row / 3 && selected_col / 3 == col / 3
             });
+        let same_row = self
+            .sudoku
+            .selected()
+            .is_some_and(|(selected_row, _)| selected_row == row);
+        let same_col = self
+            .sudoku
+            .selected()
+            .is_some_and(|(_, selected_col)| selected_col == col);
         let conflict = self.sudoku.has_conflict(row, col);
         let wrong = self.sudoku.is_wrong(row, col);
         let given = self.sudoku.is_given(row, col);
@@ -235,6 +281,8 @@ impl RammapApp {
             Color::argb(255, 130, 55, 65)
         } else if selected {
             Color::argb(255, 55, 100, 155)
+        } else if same_row || same_col {
+            Color::argb(255, 42, 62, 78)
         } else if same_box {
             Color::argb(255, 48, 72, 105)
         } else if given {

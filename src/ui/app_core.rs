@@ -27,6 +27,7 @@ impl RammapApp {
                 }
             }
             RammapMessage::TogglePencil => self.pencil_mode = !self.pencil_mode,
+            RammapMessage::CheckAnswers => self.sudoku.check_answers(),
             RammapMessage::SetDifficulty(difficulty) => {
                 self.sudoku = Sudoku::new_with_difficulty(difficulty);
                 self.pencil_mode = false;
