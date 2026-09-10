@@ -260,6 +260,7 @@ impl Sudoku {
         }
     }
 
+    #[allow(dead_code)]
     pub fn move_selection(&mut self, row_delta: isize, col_delta: isize) {
         let (row, col) = self.selected.unwrap_or((0, 0));
         let next_row = (row as isize + row_delta).clamp(0, 8) as usize;

@@ -16,7 +16,11 @@ impl Component for RammapApp {
     }
 
     fn update(&mut self, message: Self::Message, _context: &ComponentContext<Self>) {
+        let focus_keyboard_input = matches!(message, RammapMessage::SelectCell(_, _));
         self.update_message(message);
+        if focus_keyboard_input {
+            _ = self.keyboard_ref.request_focus();
+        }
     }
 
     fn view(&self, _input: &Self::Input, context: &mut ViewContext<Self>) -> View {
@@ -59,18 +63,6 @@ impl Component for RammapApp {
             AcceleratorModifiers::None,
             context.message(RammapMessage::EnterNumber(0)),
         ));
-        for (key, row_delta, col_delta) in [
-            (AcceleratorKey::Left, 0, -1),
-            (AcceleratorKey::Up, -1, 0),
-            (AcceleratorKey::Right, 0, 1),
-            (AcceleratorKey::Down, 1, 0),
-        ] {
-            accelerators.push(KeyAccelerator::new(
-                key,
-                AcceleratorModifiers::None,
-                context.message(RammapMessage::MoveSelection(row_delta, col_delta)),
-            ));
-        }
         self.sudoku_view(send, KeyAccelerators::new(accelerators))
     }
 }
@@ -179,6 +171,7 @@ impl RammapApp {
         let previous_text = Rc::new(RefCell::new(String::new()));
         let previous_text_state = previous_text.clone();
         let keyboard_input = TextBox::new()
+            .element_ref(&self.keyboard_ref)
             .width(220.0)
             .text("")
             .placeholder_text("ここをクリックして数字キーで入力（テンキー対応）")

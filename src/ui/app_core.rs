@@ -1,8 +1,10 @@
 use crate::sudoku::Sudoku;
 use crate::ui::types::{AppInput, RammapMessage};
+use windows_reactor::{ElementRef, TextBox};
 
 pub struct RammapApp {
     pub(super) sudoku: Sudoku,
+    pub(super) keyboard_ref: ElementRef<TextBox>,
     pub(super) pencil_mode: bool,
     pub(super) continuous_pencil: bool,
     pub(super) pencil_value: Option<u8>,
@@ -13,6 +15,7 @@ impl RammapApp {
     pub(super) fn new(_input: &AppInput) -> Self {
         Self {
             sudoku: Sudoku::new(),
+            keyboard_ref: ElementRef::new(),
             pencil_mode: false,
             continuous_pencil: false,
             pencil_value: None,
@@ -29,9 +32,6 @@ impl RammapApp {
                 {
                     self.sudoku.toggle_pencil_mark(value);
                 }
-            }
-            RammapMessage::MoveSelection(row_delta, col_delta) => {
-                self.sudoku.move_selection(row_delta, col_delta);
             }
             RammapMessage::EnterNumber(value) => {
                 if self.pencil_mode && value != 0 {
