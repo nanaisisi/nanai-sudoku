@@ -165,6 +165,16 @@ impl RammapApp {
                 .content(TextBlock::new().text("答え合わせ")),
         ));
 
+        let clear_all_send = send.clone();
+        keypad.push(KeyedView::new(
+            13usize,
+            Button::new()
+                .width(116.0)
+                .height(42.0)
+                .on_click(move || clear_all_send(RammapMessage::ShowClearAllDialog))
+                .content(TextBlock::new().text("全削除…")),
+        ));
+
         let keyboard_send = send.clone();
         let previous_text = Rc::new(RefCell::new(String::new()));
         let previous_text_state = previous_text.clone();
@@ -207,6 +217,22 @@ impl RammapApp {
         }
 
         let new_send = send.clone();
+        let dialog_send = send.clone();
+        let clear_all_dialog = ContentDialog::new()
+            .title("入力を全削除しますか？")
+            .primary_button_text("全削除")
+            .secondary_button_text("キャンセル")
+            .is_open(self.clear_all_dialog_open)
+            .on_closed(move |result| {
+                if result == ContentDialogResult::Primary {
+                    dialog_send(RammapMessage::ConfirmClearAll);
+                } else {
+                    dialog_send(RammapMessage::CancelClearAll);
+                }
+            })
+            .content(TextBlock::new().text(
+                "このゲームの通常入力と下書き候補をすべて削除します。ヒントの数字は残ります。",
+            ));
         let pencil_surface = self.pencil_mode;
         let mode_banner = Border::new()
             .padding(Thickness::xy(12.0, 8.0))
@@ -274,9 +300,8 @@ impl RammapApp {
             "空いているセルを選択してください"
         };
 
-        Grid::new()
-            .key_accelerators(accelerators)
-            .children((ScrollViewer::new().content(
+        Grid::new().key_accelerators(accelerators).children((
+            ScrollViewer::new().content(
                 StackPanel::new()
                     .spacing(12.0)
                     .margin(Thickness::uniform(16.0))
@@ -332,7 +357,9 @@ impl RammapApp {
                             .on_click(move || new_send(RammapMessage::NewGame))
                             .content(TextBlock::new().text("新しいゲーム")),
                     )),
-            ),))
+            ),
+            clear_all_dialog,
+        ))
     }
 
     fn cell<S: Fn(RammapMessage) + Clone + 'static>(

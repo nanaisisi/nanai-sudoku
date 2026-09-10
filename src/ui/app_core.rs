@@ -6,6 +6,7 @@ pub struct RammapApp {
     pub(super) pencil_mode: bool,
     pub(super) continuous_pencil: bool,
     pub(super) pencil_value: Option<u8>,
+    pub(super) clear_all_dialog_open: bool,
 }
 
 impl RammapApp {
@@ -15,6 +16,7 @@ impl RammapApp {
             pencil_mode: false,
             continuous_pencil: false,
             pencil_value: None,
+            clear_all_dialog_open: false,
         }
     }
 
@@ -22,10 +24,10 @@ impl RammapApp {
         match message {
             RammapMessage::SelectCell(row, col) => {
                 self.sudoku.select(row, col);
-                if self.continuous_pencil {
-                    if let Some(value) = self.pencil_value {
-                        self.sudoku.toggle_pencil_mark(value);
-                    }
+                if self.continuous_pencil
+                    && let Some(value) = self.pencil_value
+                {
+                    self.sudoku.toggle_pencil_mark(value);
                 }
             }
             RammapMessage::MoveSelection(row_delta, col_delta) => {
@@ -71,17 +73,29 @@ impl RammapApp {
                 }
             }
             RammapMessage::CheckAnswers => self.sudoku.check_answers(),
+            RammapMessage::ShowClearAllDialog => {
+                self.clear_all_dialog_open = true;
+            }
+            RammapMessage::ConfirmClearAll => {
+                self.sudoku.clear_all();
+                self.clear_all_dialog_open = false;
+            }
+            RammapMessage::CancelClearAll => {
+                self.clear_all_dialog_open = false;
+            }
             RammapMessage::SetDifficulty(difficulty) => {
                 self.sudoku = Sudoku::new_with_difficulty(difficulty);
                 self.pencil_mode = false;
                 self.continuous_pencil = false;
                 self.pencil_value = None;
+                self.clear_all_dialog_open = false;
             }
             RammapMessage::NewGame => {
                 self.sudoku.new_game();
                 self.pencil_mode = false;
                 self.continuous_pencil = false;
                 self.pencil_value = None;
+                self.clear_all_dialog_open = false;
             }
         }
     }

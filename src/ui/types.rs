@@ -11,6 +11,9 @@ pub enum RammapMessage {
     TogglePencil,
     ToggleContinuousPencil,
     CheckAnswers,
+    ShowClearAllDialog,
+    ConfirmClearAll,
+    CancelClearAll,
     SetDifficulty(Difficulty),
     NewGame,
 }

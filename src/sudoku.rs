@@ -1,3 +1,6 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 const SOLUTION: [[u8; 9]; 9] = [
     [5, 3, 4, 6, 7, 8, 9, 1, 2],
     [6, 7, 2, 1, 9, 5, 3, 4, 8],
@@ -102,24 +105,60 @@ impl Difficulty {
         puzzle
     }
 
-    fn board_for_game(self, game_number: u32) -> ([[u8; 9]; 9], [[u8; 9]; 9]) {
-        let puzzle = self.puzzle();
-        if game_number.is_multiple_of(2) {
-            (puzzle, SOLUTION)
-        } else {
-            (rotate_board(puzzle), rotate_board(SOLUTION))
-        }
+    fn board_for_game(self, seed: u64) -> ([[u8; 9]; 9], [[u8; 9]; 9]) {
+        let mut random = Random::new(seed);
+        let mut digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        random.shuffle(&mut digits);
+
+        let puzzle = map_digits(self.puzzle(), digits);
+        let solution = map_digits(SOLUTION, digits);
+        (puzzle, solution)
     }
 }
 
-fn rotate_board(board: [[u8; 9]; 9]) -> [[u8; 9]; 9] {
-    let mut rotated = [[0; 9]; 9];
+fn map_digits(board: [[u8; 9]; 9], digits: [u8; 9]) -> [[u8; 9]; 9] {
+    let mut mapped = [[0; 9]; 9];
     for row in 0..9 {
         for col in 0..9 {
-            rotated[8 - row][8 - col] = board[row][col];
+            let value = board[row][col];
+            mapped[row][col] = if value == 0 {
+                0
+            } else {
+                digits[(value - 1) as usize]
+            };
         }
     }
-    rotated
+    mapped
+}
+
+fn random_seed(game_number: u32) -> u64 {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos() as u64);
+    time ^ (u64::from(game_number) << 32) ^ COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+struct Random(u64);
+
+impl Random {
+    fn new(seed: u64) -> Self {
+        Self(seed | 1)
+    }
+
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 7;
+        self.0 ^= self.0 >> 9;
+        self.0 ^= self.0 << 8;
+        self.0
+    }
+
+    fn shuffle(&mut self, values: &mut [u8; 9]) {
+        for index in (1..values.len()).rev() {
+            let other = (self.next() as usize) % (index + 1);
+            values.swap(index, other);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,7 +197,7 @@ impl Sudoku {
     }
 
     fn new_game_state(difficulty: Difficulty, game_number: u32) -> Self {
-        let (puzzle, expected_solution) = difficulty.board_for_game(game_number);
+        let (puzzle, expected_solution) = difficulty.board_for_game(random_seed(game_number));
         let mut derived = puzzle;
         assert!(
             solve_board(&mut derived),
@@ -262,6 +301,19 @@ impl Sudoku {
 
     pub fn clear(&mut self) -> InputResult {
         self.input(0)
+    }
+
+    pub fn clear_all(&mut self) {
+        for row in 0..9 {
+            for col in 0..9 {
+                if !self.givens[row][col] {
+                    self.cells[row][col] = 0;
+                    self.pencil_marks[row][col] = 0;
+                }
+            }
+        }
+        self.answers_checked = false;
+        self.completed = false;
     }
 
     pub fn toggle_pencil_mark(&mut self, value: u8) -> InputResult {
@@ -374,30 +426,19 @@ mod tests {
         let mut game = Sudoku::new();
         game.select(0, 0);
         assert_eq!(game.input(1), InputResult::Ignored);
-        assert_eq!(game.cells()[0][0], 5);
+        assert!(game.cells()[0][0] != 0);
     }
 
     #[test]
     fn entering_solution_completes_game() {
         let mut game = Sudoku::new();
+        let solution = game.solve().expect("puzzle should be solvable");
         for row in 0..9 {
             for col in 0..9 {
                 if !game.is_given(row, col) {
                     game.select(row, col);
                     assert!(matches!(
-                        game.input(
-                            [
-                                [5, 3, 4, 6, 7, 8, 9, 1, 2],
-                                [6, 7, 2, 1, 9, 5, 3, 4, 8],
-                                [1, 9, 8, 3, 4, 2, 5, 6, 7],
-                                [8, 5, 9, 7, 6, 1, 4, 2, 3],
-                                [4, 2, 6, 8, 5, 3, 7, 9, 1],
-                                [7, 1, 3, 9, 2, 4, 8, 5, 6],
-                                [9, 6, 1, 5, 3, 7, 2, 8, 4],
-                                [2, 8, 7, 4, 1, 9, 6, 3, 5],
-                                [3, 4, 5, 2, 8, 6, 1, 7, 9]
-                            ][row][col]
-                        ),
+                        game.input(solution[row][col]),
                         InputResult::Updated | InputResult::Completed
                     ));
                 }
@@ -410,7 +451,8 @@ mod tests {
     fn duplicate_values_are_reported() {
         let mut game = Sudoku::new();
         game.select(0, 2);
-        assert_eq!(game.input(5), InputResult::Updated);
+        let conflicting_value = game.cells()[0][0];
+        assert_eq!(game.input(conflicting_value), InputResult::Updated);
         assert!(game.has_conflict(0, 2));
         assert!(!game.is_wrong(0, 2));
         game.check_answers();
@@ -454,6 +496,22 @@ mod tests {
 
         assert_ne!(*game.cells(), initial);
         assert_eq!(game.selected(), None);
+        assert_eq!(game.pencil_marks(0, 2), 0);
+        assert!(!game.is_completed());
+    }
+
+    #[test]
+    fn clear_all_removes_entries_and_pencil_marks_but_keeps_givens() {
+        let mut game = Sudoku::new();
+        let given = game.cells()[0][0];
+        game.select(0, 2);
+        assert_eq!(game.toggle_pencil_mark(4), InputResult::Updated);
+        assert_eq!(game.input(4), InputResult::Updated);
+        game.select(0, 0);
+        game.clear_all();
+
+        assert_eq!(game.cells()[0][0], given);
+        assert_eq!(game.cells()[0][2], 0);
         assert_eq!(game.pencil_marks(0, 2), 0);
         assert!(!game.is_completed());
     }
