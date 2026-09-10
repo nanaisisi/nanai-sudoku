@@ -309,9 +309,7 @@ impl App {
                             .font_weight(FontWeight::BOLD),
                         mode_banner,
                         TextBlock::new()
-                            .text(
-                                "9×9 ナンプレ（セルを選んで数字入力。入力後は次の空きセルへ移動）",
-                            )
+                            .text("9×9 ナンプレ（セルを選んで数字入力。入力後も選択セルを維持）")
                             .font_size(14.0),
                         TextBlock::new()
                             .text(format!(
@@ -355,12 +353,7 @@ impl App {
         ))
     }
 
-    fn cell<S: Fn(Message) + Clone + 'static>(
-        &self,
-        row: usize,
-        col: usize,
-        send: S,
-    ) -> View {
+    fn cell<S: Fn(Message) + Clone + 'static>(&self, row: usize, col: usize, send: S) -> View {
         let value = self.sudoku.cells()[row][col];
         let selected = self.sudoku.selected() == Some((row, col));
         let same_box = self

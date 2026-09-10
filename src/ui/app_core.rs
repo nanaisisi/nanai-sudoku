@@ -41,19 +41,12 @@ impl App {
                         self.sudoku.toggle_pencil_mark(value);
                     }
                 } else if value == 0 {
-                    if !self.pencil_mode
-                        && matches!(self.sudoku.clear(), crate::sudoku::InputResult::Updated)
-                    {
-                        self.sudoku.select_next_editable();
+                    if !self.pencil_mode {
+                        self.sudoku.clear();
                     }
                 } else {
-                    if !self.pencil_mode
-                        && matches!(
-                            self.sudoku.input(value),
-                            crate::sudoku::InputResult::Updated
-                        )
-                    {
-                        self.sudoku.select_next_editable();
+                    if !self.pencil_mode {
+                        self.sudoku.input(value);
                     }
                 }
             }

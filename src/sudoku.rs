@@ -254,21 +254,6 @@ impl Sudoku {
         }
     }
 
-    pub fn select_next_editable(&mut self) {
-        let Some((row, col)) = self.selected else {
-            return;
-        };
-        for offset in 1..=81 {
-            let index = (row * 9 + col + offset) % 81;
-            let next_row = index / 9;
-            let next_col = index % 9;
-            if !self.givens[next_row][next_col] {
-                self.select(next_row, next_col);
-                return;
-            }
-        }
-    }
-
     pub fn input(&mut self, value: u8) -> InputResult {
         let Some((row, col)) = self.selected else {
             return InputResult::Ignored;
