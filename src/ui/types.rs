@@ -8,6 +8,7 @@ pub enum RammapMessage {
     SelectCell(usize, usize),
     EnterNumber(u8),
     TogglePencil,
+    ToggleContinuousPencil,
     CheckAnswers,
     SetDifficulty(Difficulty),
     NewGame,

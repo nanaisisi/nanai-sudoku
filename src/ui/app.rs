@@ -25,24 +25,24 @@ impl Component for RammapApp {
             }
         };
         let keys = [
-            AcceleratorKey::NumberPad1,
-            AcceleratorKey::NumberPad2,
-            AcceleratorKey::NumberPad3,
-            AcceleratorKey::NumberPad4,
-            AcceleratorKey::NumberPad5,
-            AcceleratorKey::NumberPad6,
-            AcceleratorKey::NumberPad7,
-            AcceleratorKey::NumberPad8,
-            AcceleratorKey::NumberPad9,
+            (AcceleratorKey::NumberPad0, 0),
+            (AcceleratorKey::NumberPad1, 1),
+            (AcceleratorKey::NumberPad2, 2),
+            (AcceleratorKey::NumberPad3, 3),
+            (AcceleratorKey::NumberPad4, 4),
+            (AcceleratorKey::NumberPad5, 5),
+            (AcceleratorKey::NumberPad6, 6),
+            (AcceleratorKey::NumberPad7, 7),
+            (AcceleratorKey::NumberPad8, 8),
+            (AcceleratorKey::NumberPad9, 9),
         ];
         let accelerators = keys
             .into_iter()
-            .enumerate()
-            .map(|(index, key)| {
+            .map(|(key, value)| {
                 KeyAccelerator::new(
                     key,
                     AcceleratorModifiers::None,
-                    context.message(RammapMessage::EnterNumber((index + 1) as u8)),
+                    context.message(RammapMessage::EnterNumber(value)),
                 )
             })
             .collect::<Vec<_>>();
@@ -74,13 +74,22 @@ impl RammapApp {
         let mut keypad = Vec::new();
         for value in 1..=9 {
             let input_send = send.clone();
+            let active = self.continuous_pencil && self.pencil_value == Some(value);
             keypad.push(KeyedView::new(
                 value as usize,
                 Button::new()
                     .width(42.0)
                     .height(42.0)
                     .on_click(move || input_send(RammapMessage::EnterNumber(value)))
-                    .content(TextBlock::new().text(value.to_string()).font_size(18.0)),
+                    .content(
+                        TextBlock::new()
+                            .text(if active {
+                                format!("●{}", value)
+                            } else {
+                                value.to_string()
+                            })
+                            .font_size(18.0),
+                    ),
             ));
         }
         let clear_send = send.clone();
@@ -107,6 +116,20 @@ impl RammapApp {
                 })),
         ));
 
+        let continuous_send = send.clone();
+        keypad.push(KeyedView::new(
+            12usize,
+            Button::new()
+                .width(116.0)
+                .height(42.0)
+                .on_click(move || continuous_send(RammapMessage::ToggleContinuousPencil))
+                .content(TextBlock::new().text(if self.continuous_pencil {
+                    "連続下書き ON"
+                } else {
+                    "連続下書き"
+                })),
+        ));
+
         let check_send = send.clone();
         keypad.push(KeyedView::new(
             11usize,
@@ -116,6 +139,21 @@ impl RammapApp {
                 .on_click(move || check_send(RammapMessage::CheckAnswers))
                 .content(TextBlock::new().text("答え合わせ")),
         ));
+
+        let keyboard_send = send.clone();
+        let keyboard_input = TextBox::new()
+            .width(220.0)
+            .text("")
+            .placeholder_text("ここをクリックして数字キーで入力（テンキー対応）")
+            .on_text_changed(move |text: String| {
+                if let Some(value) = text
+                    .chars()
+                    .filter_map(|character| character.to_digit(10))
+                    .last()
+                {
+                    keyboard_send(RammapMessage::EnterNumber(value as u8));
+                }
+            });
 
         let mut difficulty_buttons = Vec::new();
         for (index, difficulty) in Difficulty::ALL.iter().copied().enumerate() {
@@ -154,7 +192,11 @@ impl RammapApp {
             .content(
                 TextBlock::new()
                     .text(if self.pencil_mode {
-                        "✎ 下書きモード — 候補数字を入力中"
+                        if self.continuous_pencil {
+                            "✎ 連続下書き — 数字を選んでセルを順にクリック"
+                        } else {
+                            "✎ 下書きモード — 候補数字を入力中"
+                        }
                     } else {
                         "数字入力モード"
                     })
@@ -187,7 +229,11 @@ impl RammapApp {
             if self.sudoku.is_wrong(row, col) {
                 "❌ 不正解です — 別の数字を試してください"
             } else if self.pencil_mode {
-                "下書きモード — 数字ボタンで候補を追加・削除できます"
+                if self.continuous_pencil {
+                    "連続下書き — 数字を選んで、複数のセルをクリックできます"
+                } else {
+                    "下書きモード — 数字ボタンで候補を追加・削除できます"
+                }
             } else {
                 "セルを選択中 — 数字ボタンで入力できます"
             }
@@ -211,13 +257,16 @@ impl RammapApp {
                             .font_size(30.0)
                             .font_weight(FontWeight::BOLD),
                         mode_banner,
-                        TextBlock::new().text("9×9 ナンプレ").font_size(14.0),
+                        TextBlock::new()
+                            .text("9×9 ナンプレ（入力欄をクリックして数字キーで入力できます）")
+                            .font_size(14.0),
                         TextBlock::new()
                             .text(format!(
-                                "難易度: {}（{} / {}マス入力済み）",
+                                "難易度: {}（{}・ヒント{}・入力{}マス）",
                                 self.sudoku.difficulty().label(),
                                 self.sudoku.difficulty().description(),
                                 self.sudoku.difficulty().clue_count(),
+                                entered_count(&self.sudoku),
                             ))
                             .font_size(14.0),
                         StackPanel::new()
@@ -237,6 +286,7 @@ impl RammapApp {
                             }))
                             .corner_radius(CornerRadius::uniform(6.0))
                             .content(StackPanel::new().spacing(2.0).keyed_children(rows)),
+                        keyboard_input,
                         StackPanel::new()
                             .orientation(Orientation::Horizontal)
                             .spacing(8.0)
@@ -311,7 +361,7 @@ impl RammapApp {
                     .content(if value == 0 && pencil_marks != 0 {
                         TextBlock::new()
                             .text(pencil_text(pencil_marks))
-                            .font_size(9.0)
+                            .font_size(11.0)
                     } else {
                         TextBlock::new()
                             .text(if value == 0 {
@@ -346,4 +396,19 @@ fn pencil_text(marks: u16) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn entered_count(sudoku: &crate::sudoku::Sudoku) -> usize {
+    sudoku
+        .cells()
+        .iter()
+        .enumerate()
+        .flat_map(|(row, cells)| {
+            cells
+                .iter()
+                .enumerate()
+                .map(move |(col, &value)| (row, col, value))
+        })
+        .filter(|&(row, col, value)| value != 0 && !sudoku.is_given(row, col))
+        .count()
 }

@@ -10,6 +10,10 @@ Windowsのあべののじいさんさんのナンプレ独学とスマホのeasy
 
 ## 🛠️ 開発・ビルドコマンド
 
+Admin
+
+winapp cert install devcert.pfx
+
 ```bash
 # 実行
 cargo run
