@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::sudoku::Difficulty;
 use crate::ui::types::{AppInput, RammapMessage};
 use windows_reactor::*;
@@ -36,7 +39,7 @@ impl Component for RammapApp {
             (AcceleratorKey::NumberPad8, 8),
             (AcceleratorKey::NumberPad9, 9),
         ];
-        let accelerators = keys
+        let mut accelerators = keys
             .into_iter()
             .map(|(key, value)| {
                 KeyAccelerator::new(
@@ -46,6 +49,16 @@ impl Component for RammapApp {
                 )
             })
             .collect::<Vec<_>>();
+        accelerators.push(KeyAccelerator::new(
+            AcceleratorKey::Subtract,
+            AcceleratorModifiers::None,
+            context.message(RammapMessage::EnterNumber(0)),
+        ));
+        accelerators.push(KeyAccelerator::new(
+            AcceleratorKey::Decimal,
+            AcceleratorModifiers::None,
+            context.message(RammapMessage::EnterNumber(0)),
+        ));
         self.sudoku_view(send, KeyAccelerators::new(accelerators))
     }
 }
@@ -141,18 +154,26 @@ impl RammapApp {
         ));
 
         let keyboard_send = send.clone();
+        let previous_text = Rc::new(RefCell::new(String::new()));
+        let previous_text_state = previous_text.clone();
         let keyboard_input = TextBox::new()
             .width(220.0)
             .text("")
             .placeholder_text("ここをクリックして数字キーで入力（テンキー対応）")
             .on_text_changed(move |text: String| {
-                if let Some(value) = text
+                let previous = previous_text_state.borrow().clone();
+                let new_text = if text.starts_with(&previous) {
+                    &text[previous.len()..]
+                } else {
+                    &text
+                };
+                for value in new_text
                     .chars()
                     .filter_map(|character| character.to_digit(10))
-                    .last()
                 {
                     keyboard_send(RammapMessage::EnterNumber(value as u8));
                 }
+                *previous_text_state.borrow_mut() = text;
             });
 
         let mut difficulty_buttons = Vec::new();
