@@ -4,7 +4,7 @@ use crate::sudoku::Difficulty;
 pub struct AppInput;
 
 #[derive(Clone, Copy)]
-pub enum RammapMessage {
+pub enum Message {
     SelectCell(usize, usize),
     EnterNumber(u8),
     TogglePencil,

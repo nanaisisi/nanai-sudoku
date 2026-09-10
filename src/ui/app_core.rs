@@ -1,8 +1,8 @@
 use crate::sudoku::Sudoku;
-use crate::ui::types::{AppInput, RammapMessage};
+use crate::ui::types::{AppInput, Message};
 use windows_reactor::{ElementRef, TextBox};
 
-pub struct RammapApp {
+pub struct App {
     pub(super) sudoku: Sudoku,
     pub(super) keyboard_ref: ElementRef<TextBox>,
     pub(super) pencil_mode: bool,
@@ -11,7 +11,7 @@ pub struct RammapApp {
     pub(super) clear_all_dialog_open: bool,
 }
 
-impl RammapApp {
+impl App {
     pub(super) fn new(_input: &AppInput) -> Self {
         Self {
             sudoku: Sudoku::new(),
@@ -23,9 +23,9 @@ impl RammapApp {
         }
     }
 
-    pub(super) fn update_message(&mut self, message: RammapMessage) {
+    pub(super) fn update_message(&mut self, message: Message) {
         match message {
-            RammapMessage::SelectCell(row, col) => {
+            Message::SelectCell(row, col) => {
                 self.sudoku.select(row, col);
                 if self.continuous_pencil
                     && let Some(value) = self.pencil_value
@@ -33,7 +33,7 @@ impl RammapApp {
                     self.sudoku.toggle_pencil_mark(value);
                 }
             }
-            RammapMessage::EnterNumber(value) => {
+            Message::EnterNumber(value) => {
                 if self.pencil_mode && value != 0 {
                     if self.continuous_pencil {
                         self.pencil_value = Some(value);
@@ -57,14 +57,14 @@ impl RammapApp {
                     }
                 }
             }
-            RammapMessage::TogglePencil => {
+            Message::TogglePencil => {
                 self.pencil_mode = !self.pencil_mode;
                 if !self.pencil_mode {
                     self.continuous_pencil = false;
                     self.pencil_value = None;
                 }
             }
-            RammapMessage::ToggleContinuousPencil => {
+            Message::ToggleContinuousPencil => {
                 if self.pencil_mode {
                     self.continuous_pencil = !self.continuous_pencil;
                     if !self.continuous_pencil {
@@ -72,25 +72,25 @@ impl RammapApp {
                     }
                 }
             }
-            RammapMessage::CheckAnswers => self.sudoku.check_answers(),
-            RammapMessage::ShowClearAllDialog => {
+            Message::CheckAnswers => self.sudoku.check_answers(),
+            Message::ShowClearAllDialog => {
                 self.clear_all_dialog_open = true;
             }
-            RammapMessage::ConfirmClearAll => {
+            Message::ConfirmClearAll => {
                 self.sudoku.clear_all();
                 self.clear_all_dialog_open = false;
             }
-            RammapMessage::CancelClearAll => {
+            Message::CancelClearAll => {
                 self.clear_all_dialog_open = false;
             }
-            RammapMessage::SetDifficulty(difficulty) => {
+            Message::SetDifficulty(difficulty) => {
                 self.sudoku = Sudoku::new_with_difficulty(difficulty);
                 self.pencil_mode = false;
                 self.continuous_pencil = false;
                 self.pencil_value = None;
                 self.clear_all_dialog_open = false;
             }
-            RammapMessage::NewGame => {
+            Message::NewGame => {
                 self.sudoku.new_game();
                 self.pencil_mode = false;
                 self.continuous_pencil = false;

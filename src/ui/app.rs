@@ -2,21 +2,21 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::sudoku::Difficulty;
-use crate::ui::types::{AppInput, RammapMessage};
+use crate::ui::types::{AppInput, Message};
 use windows_reactor::*;
 
-pub use crate::ui::app_core::RammapApp;
+pub use crate::ui::app_core::App;
 
-impl Component for RammapApp {
+impl Component for App {
     type Input = AppInput;
-    type Message = RammapMessage;
+    type Message = Message;
 
     fn create(input: &Self::Input, _context: &ComponentContext<Self>) -> Self {
         Self::new(input)
     }
 
     fn update(&mut self, message: Self::Message, _context: &ComponentContext<Self>) {
-        let focus_keyboard_input = matches!(message, RammapMessage::SelectCell(_, _));
+        let focus_keyboard_input = matches!(message, Message::SelectCell(_, _));
         self.update_message(message);
         if focus_keyboard_input {
             _ = self.keyboard_ref.request_focus();
@@ -49,26 +49,26 @@ impl Component for RammapApp {
                 KeyAccelerator::new(
                     key,
                     AcceleratorModifiers::None,
-                    context.message(RammapMessage::EnterNumber(value)),
+                    context.message(Message::EnterNumber(value)),
                 )
             })
             .collect::<Vec<_>>();
         accelerators.push(KeyAccelerator::new(
             AcceleratorKey::Subtract,
             AcceleratorModifiers::None,
-            context.message(RammapMessage::EnterNumber(0)),
+            context.message(Message::EnterNumber(0)),
         ));
         accelerators.push(KeyAccelerator::new(
             AcceleratorKey::Decimal,
             AcceleratorModifiers::None,
-            context.message(RammapMessage::EnterNumber(0)),
+            context.message(Message::EnterNumber(0)),
         ));
         self.sudoku_view(send, KeyAccelerators::new(accelerators))
     }
 }
 
-impl RammapApp {
-    fn sudoku_view<S: Fn(RammapMessage) + Clone + 'static>(
+impl App {
+    fn sudoku_view<S: Fn(Message) + Clone + 'static>(
         &self,
         send: S,
         accelerators: KeyAccelerators,
@@ -97,7 +97,7 @@ impl RammapApp {
                 Button::new()
                     .width(42.0)
                     .height(42.0)
-                    .on_click(move || input_send(RammapMessage::EnterNumber(value)))
+                    .on_click(move || input_send(Message::EnterNumber(value)))
                     .content(
                         TextBlock::new()
                             .text(if active {
@@ -115,7 +115,7 @@ impl RammapApp {
             Button::new()
                 .width(72.0)
                 .height(42.0)
-                .on_click(move || clear_send(RammapMessage::EnterNumber(0)))
+                .on_click(move || clear_send(Message::EnterNumber(0)))
                 .content(TextBlock::new().text("消去")),
         ));
 
@@ -125,7 +125,7 @@ impl RammapApp {
             Button::new()
                 .width(92.0)
                 .height(42.0)
-                .on_click(move || pencil_send(RammapMessage::TogglePencil))
+                .on_click(move || pencil_send(Message::TogglePencil))
                 .content(TextBlock::new().text(if self.pencil_mode {
                     "下書き ON"
                 } else {
@@ -139,7 +139,7 @@ impl RammapApp {
             Button::new()
                 .width(116.0)
                 .height(42.0)
-                .on_click(move || continuous_send(RammapMessage::ToggleContinuousPencil))
+                .on_click(move || continuous_send(Message::ToggleContinuousPencil))
                 .content(TextBlock::new().text(if self.continuous_pencil {
                     "連続下書き ON"
                 } else {
@@ -153,7 +153,7 @@ impl RammapApp {
             Button::new()
                 .width(104.0)
                 .height(42.0)
-                .on_click(move || check_send(RammapMessage::CheckAnswers))
+                .on_click(move || check_send(Message::CheckAnswers))
                 .content(TextBlock::new().text("答え合わせ")),
         ));
 
@@ -163,7 +163,7 @@ impl RammapApp {
             Button::new()
                 .width(116.0)
                 .height(42.0)
-                .on_click(move || clear_all_send(RammapMessage::ShowClearAllDialog))
+                .on_click(move || clear_all_send(Message::ShowClearAllDialog))
                 .content(TextBlock::new().text("全削除…")),
         ));
 
@@ -186,7 +186,7 @@ impl RammapApp {
                     .chars()
                     .filter_map(|character| character.to_digit(10))
                 {
-                    keyboard_send(RammapMessage::EnterNumber(value as u8));
+                    keyboard_send(Message::EnterNumber(value as u8));
                 }
                 *previous_text_state.borrow_mut() = text;
             });
@@ -200,7 +200,7 @@ impl RammapApp {
                 Button::new()
                     .width(100.0)
                     .height(38.0)
-                    .on_click(move || difficulty_send(RammapMessage::SetDifficulty(difficulty)))
+                    .on_click(move || difficulty_send(Message::SetDifficulty(difficulty)))
                     .content(TextBlock::new().text(if selected {
                         format!("● {}", difficulty.label())
                     } else {
@@ -218,9 +218,9 @@ impl RammapApp {
             .is_open(self.clear_all_dialog_open)
             .on_closed(move |result| {
                 if result == ContentDialogResult::Primary {
-                    dialog_send(RammapMessage::ConfirmClearAll);
+                    dialog_send(Message::ConfirmClearAll);
                 } else {
-                    dialog_send(RammapMessage::CancelClearAll);
+                    dialog_send(Message::CancelClearAll);
                 }
             })
             .content(TextBlock::new().text(
@@ -347,7 +347,7 @@ impl RammapApp {
                         TextBlock::new().text(status).font_size(14.0),
                         Button::new()
                             .width(150.0)
-                            .on_click(move || new_send(RammapMessage::NewGame))
+                            .on_click(move || new_send(Message::NewGame))
                             .content(TextBlock::new().text("新しいゲーム")),
                     )),
             ),
@@ -355,7 +355,7 @@ impl RammapApp {
         ))
     }
 
-    fn cell<S: Fn(RammapMessage) + Clone + 'static>(
+    fn cell<S: Fn(Message) + Clone + 'static>(
         &self,
         row: usize,
         col: usize,
@@ -412,7 +412,7 @@ impl RammapApp {
                 Button::new()
                     .width(44.0)
                     .height(44.0)
-                    .on_click(move || cell_send(RammapMessage::SelectCell(row, col)))
+                    .on_click(move || cell_send(Message::SelectCell(row, col)))
                     .content(if value == 0 && pencil_marks != 0 {
                         TextBlock::new()
                             .text(pencil_text(pencil_marks))

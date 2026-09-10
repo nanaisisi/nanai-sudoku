@@ -3,11 +3,11 @@
 mod sudoku;
 mod ui;
 
-use ui::app::RammapApp;
+use ui::app::App;
 use ui::types::AppInput;
-use windows_reactor::App;
+use windows_reactor::App as ReactorApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    App::run_component::<RammapApp>(AppInput)?;
+    ReactorApp::run_component::<App>(AppInput)?;
     Ok(())
 }
