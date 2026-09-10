@@ -6,6 +6,7 @@ pub struct AppInput;
 #[derive(Clone, Copy)]
 pub enum RammapMessage {
     SelectCell(usize, usize),
+    MoveSelection(isize, isize),
     EnterNumber(u8),
     TogglePencil,
     ToggleContinuousPencil,

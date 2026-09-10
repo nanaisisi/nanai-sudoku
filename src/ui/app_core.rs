@@ -28,6 +28,9 @@ impl RammapApp {
                     }
                 }
             }
+            RammapMessage::MoveSelection(row_delta, col_delta) => {
+                self.sudoku.move_selection(row_delta, col_delta);
+            }
             RammapMessage::EnterNumber(value) => {
                 if self.pencil_mode && value != 0 {
                     if self.continuous_pencil {
@@ -36,9 +39,20 @@ impl RammapApp {
                         self.sudoku.toggle_pencil_mark(value);
                     }
                 } else if value == 0 {
-                    self.sudoku.clear();
+                    if !self.pencil_mode
+                        && matches!(self.sudoku.clear(), crate::sudoku::InputResult::Updated)
+                    {
+                        self.sudoku.select_next_editable();
+                    }
                 } else {
-                    self.sudoku.input(value);
+                    if !self.pencil_mode
+                        && matches!(
+                            self.sudoku.input(value),
+                            crate::sudoku::InputResult::Updated
+                        )
+                    {
+                        self.sudoku.select_next_editable();
+                    }
                 }
             }
             RammapMessage::TogglePencil => {

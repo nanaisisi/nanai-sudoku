@@ -59,6 +59,18 @@ impl Component for RammapApp {
             AcceleratorModifiers::None,
             context.message(RammapMessage::EnterNumber(0)),
         ));
+        for (key, row_delta, col_delta) in [
+            (AcceleratorKey::Left, 0, -1),
+            (AcceleratorKey::Up, -1, 0),
+            (AcceleratorKey::Right, 0, 1),
+            (AcceleratorKey::Down, 1, 0),
+        ] {
+            accelerators.push(KeyAccelerator::new(
+                key,
+                AcceleratorModifiers::None,
+                context.message(RammapMessage::MoveSelection(row_delta, col_delta)),
+            ));
+        }
         self.sudoku_view(send, KeyAccelerators::new(accelerators))
     }
 }
@@ -279,7 +291,9 @@ impl RammapApp {
                             .font_weight(FontWeight::BOLD),
                         mode_banner,
                         TextBlock::new()
-                            .text("9×9 ナンプレ（入力欄をクリックして数字キーで入力できます）")
+                            .text(
+                                "9×9 ナンプレ（セルを選んで数字入力。入力後は次の空きセルへ移動）",
+                            )
                             .font_size(14.0),
                         TextBlock::new()
                             .text(format!(

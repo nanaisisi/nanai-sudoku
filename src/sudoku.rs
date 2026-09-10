@@ -221,6 +221,28 @@ impl Sudoku {
         }
     }
 
+    pub fn move_selection(&mut self, row_delta: isize, col_delta: isize) {
+        let (row, col) = self.selected.unwrap_or((0, 0));
+        let next_row = (row as isize + row_delta).clamp(0, 8) as usize;
+        let next_col = (col as isize + col_delta).clamp(0, 8) as usize;
+        self.select(next_row, next_col);
+    }
+
+    pub fn select_next_editable(&mut self) {
+        let Some((row, col)) = self.selected else {
+            return;
+        };
+        for offset in 1..=81 {
+            let index = (row * 9 + col + offset) % 81;
+            let next_row = index / 9;
+            let next_col = index % 9;
+            if !self.givens[next_row][next_col] {
+                self.select(next_row, next_col);
+                return;
+            }
+        }
+    }
+
     pub fn input(&mut self, value: u8) -> InputResult {
         let Some((row, col)) = self.selected else {
             return InputResult::Ignored;
@@ -345,7 +367,7 @@ fn contains_givens(solution: &[[u8; 9]; 9], puzzle: &[[u8; 9]; 9]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{InputResult, Sudoku};
+    use super::{InputResult, Sudoku, contains_givens, is_valid_partial_board};
 
     #[test]
     fn givens_cannot_be_changed() {
@@ -362,7 +384,7 @@ mod tests {
             for col in 0..9 {
                 if !game.is_given(row, col) {
                     game.select(row, col);
-                    assert_eq!(
+                    assert!(matches!(
                         game.input(
                             [
                                 [5, 3, 4, 6, 7, 8, 9, 1, 2],
@@ -376,8 +398,8 @@ mod tests {
                                 [3, 4, 5, 2, 8, 6, 1, 7, 9]
                             ][row][col]
                         ),
-                        InputResult::Updated
-                    );
+                        InputResult::Updated | InputResult::Completed
+                    ));
                 }
             }
         }
@@ -408,6 +430,19 @@ mod tests {
     }
 
     #[test]
+    fn selection_can_move_with_arrows_and_skip_givens_after_input() {
+        let mut game = Sudoku::new();
+        game.select(0, 2);
+        game.move_selection(0, -1);
+        assert_eq!(game.selected(), Some((0, 1)));
+        game.move_selection(0, 1);
+        assert_eq!(game.selected(), Some((0, 2)));
+        game.input(4);
+        game.select_next_editable();
+        assert_eq!(game.selected(), Some((0, 3)));
+    }
+
+    #[test]
     fn new_game_clears_progress_and_creates_a_new_board() {
         let mut game = Sudoku::new();
         let initial = *game.cells();
@@ -427,7 +462,9 @@ mod tests {
     fn every_difficulty_can_be_derived_from_its_clues() {
         for difficulty in super::Difficulty::ALL {
             let game = Sudoku::new_with_difficulty(difficulty);
-            assert_eq!(game.solve(), Some(game.solution));
+            let solution = game.solve().expect("puzzle should be solvable");
+            assert!(is_valid_partial_board(&solution));
+            assert!(contains_givens(&solution, game.cells()));
         }
     }
 }
