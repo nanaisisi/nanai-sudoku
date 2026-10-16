@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use crate::sudoku::Difficulty;
 use crate::ui::types::{AppInput, Message};
 use windows_reactor::*;
@@ -16,11 +13,7 @@ impl Component for App {
     }
 
     fn update(&mut self, message: Self::Message, _context: &ComponentContext<Self>) {
-        let focus_keyboard_input = matches!(message, Message::SelectCell(_, _));
         self.update_message(message);
-        if focus_keyboard_input {
-            _ = self.keyboard_ref.request_focus();
-        }
     }
 
     fn view(&self, _input: &Self::Input, context: &mut ViewContext<Self>) -> View {
@@ -28,7 +21,7 @@ impl Component for App {
         let send = {
             let sender = sender.clone();
             move |message| {
-                sender.send(message);
+                let _ = sender.send(message);
             }
         };
         let keys = [
@@ -43,6 +36,27 @@ impl Component for App {
             (AcceleratorKey::NumberPad8, 8),
             (AcceleratorKey::NumberPad9, 9),
         ];
+        let send_for_keyboard = send.clone();
+        let key_down_callback = RoutedCallback::new(move |info: KeyEventInfo| {
+            if info.key == VirtualKey::BACK {
+                send_for_keyboard(Message::EnterNumber(0));
+                true
+            } else {
+                false
+            }
+        });
+
+        let send_for_character = send.clone();
+        let character_callback = RoutedCallback::new(move |info: CharacterEventInfo| {
+            if let Some(char) = char::from_u32(info.character as u32) {
+                if let Some(digit) = char.to_digit(10) {
+                    send_for_character(Message::EnterNumber(digit as u8));
+                    return true;
+                }
+            }
+            false
+        });
+
         let mut accelerators = keys
             .into_iter()
             .map(|(key, value)| {
@@ -63,7 +77,12 @@ impl Component for App {
             AcceleratorModifiers::None,
             context.message(Message::EnterNumber(0)),
         ));
-        self.sudoku_view(send, KeyAccelerators::new(accelerators))
+        self.sudoku_view(
+            send,
+            KeyAccelerators::new(accelerators),
+            key_down_callback,
+            character_callback,
+        )
     }
 }
 
@@ -72,6 +91,8 @@ impl App {
         &self,
         send: S,
         accelerators: KeyAccelerators,
+        key_down_callback: RoutedCallback<KeyEventInfo>,
+        character_callback: RoutedCallback<CharacterEventInfo>,
     ) -> View {
         let mut rows = Vec::new();
         for row in 0..9 {
@@ -167,48 +188,6 @@ impl App {
                 .content(TextBlock::new().text("全削除…")),
         ));
 
-        let keyboard_send = send.clone();
-        let previous_text = Rc::new(RefCell::new(String::new()));
-        let previous_text_state = previous_text.clone();
-        let keyboard_input = TextBox::new()
-            .element_ref(&self.keyboard_ref)
-            .width(220.0)
-            .text("")
-            .placeholder_text("ここをクリックして数字キーで入力（テンキー対応）")
-            .on_text_changed(move |text: String| {
-                let previous = previous_text_state.borrow().clone();
-                let new_text = if text.starts_with(&previous) {
-                    &text[previous.len()..]
-                } else {
-                    &text
-                };
-                for value in new_text
-                    .chars()
-                    .filter_map(|character| character.to_digit(10))
-                {
-                    keyboard_send(Message::EnterNumber(value as u8));
-                }
-                *previous_text_state.borrow_mut() = text;
-            });
-
-        let mut difficulty_buttons = Vec::new();
-        for (index, difficulty) in Difficulty::ALL.iter().copied().enumerate() {
-            let difficulty_send = send.clone();
-            let selected = self.sudoku.difficulty() == difficulty;
-            difficulty_buttons.push(KeyedView::new(
-                index,
-                Button::new()
-                    .width(100.0)
-                    .height(38.0)
-                    .on_click(move || difficulty_send(Message::SetDifficulty(difficulty)))
-                    .content(TextBlock::new().text(if selected {
-                        format!("● {}", difficulty.label())
-                    } else {
-                        difficulty.label().to_string()
-                    })),
-            ));
-        }
-
         let new_send = send.clone();
         let dialog_send = send.clone();
         let clear_all_dialog = ContentDialog::new()
@@ -293,8 +272,27 @@ impl App {
             "空いているセルを選択してください"
         };
 
-        Grid::new().key_accelerators(accelerators).children((
-            ScrollViewer::new().content(
+        let mut difficulty_buttons = Vec::new();
+        for (index, difficulty) in Difficulty::ALL.iter().copied().enumerate() {
+            let difficulty_send = send.clone();
+            let selected = self.sudoku.difficulty() == difficulty;
+            difficulty_buttons.push(KeyedView::new(
+                index,
+                Button::new()
+                    .width(100.0)
+                    .height(38.0)
+                    .on_click(move || difficulty_send(Message::SetDifficulty(difficulty)))
+                    .content(TextBlock::new().text(if selected {
+                        format!("● {}", difficulty.label())
+                    } else {
+                        difficulty.label().to_string()
+                    })),
+            ));
+        }
+
+        let content = Grid::new()
+            .key_accelerators(accelerators)
+            .children((ScrollViewer::new().content(
                 StackPanel::new()
                     .spacing(12.0)
                     .margin(Thickness::uniform(16.0))
@@ -337,7 +335,6 @@ impl App {
                             }))
                             .corner_radius(CornerRadius::uniform(6.0))
                             .content(StackPanel::new().spacing(2.0).keyed_children(rows)),
-                        keyboard_input,
                         StackPanel::new()
                             .orientation(Orientation::Horizontal)
                             .spacing(8.0)
@@ -348,9 +345,13 @@ impl App {
                             .on_click(move || new_send(Message::NewGame))
                             .content(TextBlock::new().text("新しいゲーム")),
                     )),
-            ),
-            clear_all_dialog,
-        ))
+            ),));
+
+        Border::new()
+            .on_preview_key_down(key_down_callback)
+            .on_character_received(character_callback)
+            .content(content)
+            .content_dialog(clear_all_dialog)
     }
 
     fn cell<S: Fn(Message) + Clone + 'static>(&self, row: usize, col: usize, send: S) -> View {
@@ -425,6 +426,7 @@ impl App {
                             })
                     }),
             )
+            .into()
     }
 }
 

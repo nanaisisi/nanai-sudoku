@@ -1,10 +1,8 @@
 use crate::sudoku::Sudoku;
 use crate::ui::types::{AppInput, Message};
-use windows_reactor::{ElementRef, TextBox};
 
 pub struct App {
     pub(super) sudoku: Sudoku,
-    pub(super) keyboard_ref: ElementRef<TextBox>,
     pub(super) pencil_mode: bool,
     pub(super) continuous_pencil: bool,
     pub(super) pencil_value: Option<u8>,
@@ -15,7 +13,6 @@ impl App {
     pub(super) fn new(_input: &AppInput) -> Self {
         Self {
             sudoku: Sudoku::new(),
-            keyboard_ref: ElementRef::new(),
             pencil_mode: false,
             continuous_pencil: false,
             pencil_value: None,
